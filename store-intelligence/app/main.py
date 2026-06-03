@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.db import DB_PATH, init_db
+from app.anomalies import get_anomalies
 from app.funnel import get_funnel
 from app.health import get_health
 from app.ingestion import ingest_batch
@@ -165,6 +166,17 @@ async def heatmap(store_id: str):
         return get_heatmap(store_id, db_path=_db.DB_PATH)
     except Exception as exc:
         logger.error(f"Heatmap failed: {exc}")
+        return JSONResponse(status_code=503, content={"status": "error", "error": "db_unavailable"})
+
+
+@app.get("/stores/{store_id}/anomalies")
+async def anomalies(store_id: str):
+    """Detect VISITOR_SPIKE, QUEUE_ABANDONMENT_SURGE, DEAD_ZONE anomalies."""
+    import app.db as _db
+    try:
+        return get_anomalies(store_id, db_path=_db.DB_PATH)
+    except Exception as exc:
+        logger.error(f"Anomalies failed: {exc}")
         return JSONResponse(status_code=503, content={"status": "error", "error": "db_unavailable"})
 
 
