@@ -19,3 +19,10 @@ data/*.db
 *.pt
 *.onnx
 store-intelligence/
+
+# CCTV clips — license forbids redistribution
+clips/
+*.mp4
+*.avi
+*.mov
+*.mkv
