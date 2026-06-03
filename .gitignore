@@ -13,6 +13,7 @@ htmlcov/
 
 # generated data files
 data/events.jsonl
+data/*.db
 
 # model weights / large binaries
 *.pt
