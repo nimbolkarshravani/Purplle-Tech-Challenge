@@ -30,6 +30,10 @@ from pathlib import Path
 VISITOR_TO_BUYER_RATIO = 2.5   # total unique visitors per converting visitor
 JUNK_AMOUNT_THRESHOLD = 10.0   # POS rows below this are excluded
 STAFF_FRACTION = 0.05          # fraction of non-staff sessions that are staff
+BILLING_CAPTURE_MISS_RATE = 0.07  # fraction of converting visitors the billing
+                               # camera fails to capture: they bought (per POS)
+                               # but emit NO queue_completed (real-world camera miss),
+                               # so converting > queue_completed by design
 HISTORY_DAYS = 7               # synthetic prior days before April 10
 HISTORY_VARIANCE = 0.20        # daily traffic variance for synthetic history
 SEED = 42
@@ -233,6 +237,7 @@ def _visitor_session(
     transaction_ts: datetime = None,
     group_id: str = None,
     group_size: int = None,
+    billing_captured: bool = True,
 ):
     events = []
     id_token = f"ID_{id_base + idx:05d}"
@@ -268,7 +273,7 @@ def _visitor_session(
             events.append(_zone_exited(track_id, zone, cursor, gender, age))
             cursor += timedelta(seconds=random.randint(10, 30))
 
-    if is_converting and transaction_ts:
+    if is_converting and transaction_ts and billing_captured:
         join_ts = transaction_ts - timedelta(minutes=random.uniform(3, 8))
         join_ts = max(join_ts, cursor + timedelta(seconds=30))
         wait_secs = random.randint(5, 120)
@@ -325,7 +330,10 @@ def _generate_day(date: datetime, baskets: list, id_base: int, track_base: int, 
     # converting sessions
     for basket in use_baskets:
         entry_ts = basket["time"] - timedelta(minutes=random.uniform(10, 25))
-        events.extend(_visitor_session(idx, id_base, track_base, entry_ts, False, True, basket["brands"], basket["time"]))
+        # BILLING_CAPTURE_MISS: some buyers are not captured at the billing camera,
+        # so they convert (POS) but emit no queue_completed event.
+        billing_captured = random.random() >= BILLING_CAPTURE_MISS_RATE
+        events.extend(_visitor_session(idx, id_base, track_base, entry_ts, False, True, basket["brands"], basket["time"], billing_captured=billing_captured))
         idx += 1
 
     # non-converting sessions spread across store hours
