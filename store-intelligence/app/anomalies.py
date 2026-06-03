@@ -6,31 +6,15 @@ from typing import Optional
 
 from app.db import fetch_events, get_db
 
-# --- Thresholds (configurable) ---
-SPIKE_MULTIPLIER = 2.0          # hourly count > N× rolling avg triggers VISITOR_SPIKE
-SPIKE_STATIC_THRESHOLD = 30     # cold-start: >30 entries in any hour = spike
-ABANDONMENT_WINDOW_MINUTES = 30 # rolling window for queue abandonment rate
+SPIKE_MULTIPLIER = 2.0
+SPIKE_STATIC_THRESHOLD = 30
+ABANDONMENT_WINDOW_MINUTES = 30
 ABANDONMENT_RATE_THRESHOLD = 0.5
-DEAD_ZONE_WINDOW_HOURS = 2      # zone with 0 visits in last N hours
-MIN_HISTORY_DAYS = 3            # fewer days → cold-start static baseline
+DEAD_ZONE_WINDOW_HOURS = 2
+MIN_HISTORY_DAYS = 3
 
 
 def get_anomalies(store_id: str, db_path: Path = None) -> dict:
-    """
-    Detect anomalies in the store's recent event stream.
-
-    Returns:
-      {
-        "store_id": ...,
-        "baseline": "rolling" | "static",
-        "anomalies": [{"type", "severity", "detail", "detected_at"}, ...]
-      }
-
-    Anomaly types:
-      VISITOR_SPIKE         – hourly entries > 2× rolling 7-day avg for that hour
-      QUEUE_ABANDONMENT_SURGE – rolling-30-min abandonment rate > 50%
-      DEAD_ZONE             – zone with 0 visits in last 2 h while store is active
-    """
     with get_db(db_path) as conn:
         entries = fetch_events(conn, store_id, ["entry"])
         zone_evts = fetch_events(conn, store_id, ["zone_entered"])
@@ -149,11 +133,9 @@ def _check_visitor_spike(entries: list, now: datetime, baseline: str) -> list:
 
 def _check_abandonment_surge(queue_evts: list, now: datetime) -> list:
     window_start = now - timedelta(minutes=ABANDONMENT_WINDOW_MINUTES)
-    recent = []
-    for e in queue_evts:
-        ts = _parse_ts(e.get("queue_join_ts") or e.get("event_time"))
-        if ts and ts >= window_start:
-            recent.append(e)
+    recent = [e for e in queue_evts
+              if _parse_ts(e.get("queue_join_ts") or e.get("event_time")) is not None
+              and _parse_ts(e.get("queue_join_ts") or e.get("event_time")) >= window_start]
 
     if len(recent) < 2:
         return []
