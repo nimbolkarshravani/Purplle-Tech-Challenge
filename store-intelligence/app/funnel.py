@@ -1,0 +1,54 @@
+"""Conversion funnel computation for a store."""
+from pathlib import Path
+
+from app.db import fetch_events, get_db
+
+
+def get_funnel(store_id: str, db_path: Path = None) -> dict:
+    """
+    Compute the 4-step conversion funnel.
+
+    Steps: Entry -> Zone Visit -> Billing Queue -> Purchase.
+    Session is the unit; re-entries are deduplicated by id_token (step 1).
+    Steps 2-4 deduplicate by track_id (floor-camera identity).
+
+    Note: entry-camera id_tokens and floor-camera track_ids are different ID
+    spaces with no schema-level join key. Drop-off between steps 1 and 2
+    reflects this gap as well as genuine funnel drop-off.
+    """
+    with get_db(db_path) as conn:
+        entries = fetch_events(conn, store_id, ["entry"])
+        zone_evts = fetch_events(conn, store_id, ["zone_entered"])
+        queue_evts = fetch_events(conn, store_id, ["queue_completed", "queue_abandoned"])
+
+    # Step 1: unique non-staff id_tokens (re-entries count once)
+    entered = {e["id_token"] for e in entries if not e.get("is_staff", False)}
+    n_entered = len(entered)
+
+    # Step 2: unique track_ids with at least one zone visit
+    n_zone = len({e["track_id"] for e in zone_evts})
+
+    # Step 3: unique track_ids who joined the billing queue (any outcome)
+    n_queue = len({e["track_id"] for e in queue_evts})
+
+    # Step 4: unique track_ids who completed a purchase
+    n_purchase = len({e["track_id"] for e in queue_evts
+                      if e["event_type"] == "queue_completed"})
+
+    def _drop(prev: int, curr: int) -> float:
+        return round((prev - curr) / prev * 100, 1) if prev else 0.0
+
+    steps = [
+        {"step": "entry",         "label": "Entered Store",          "count": n_entered,  "drop_off_pct": 0.0},
+        {"step": "zone_visit",    "label": "Browsed Zones",          "count": n_zone,     "drop_off_pct": _drop(n_entered, n_zone)},
+        {"step": "billing_queue", "label": "Joined Billing Queue",   "count": n_queue,    "drop_off_pct": _drop(n_zone, n_queue)},
+        {"step": "purchase",      "label": "Completed Purchase",     "count": n_purchase, "drop_off_pct": _drop(n_queue, n_purchase)},
+    ]
+
+    conversion_rate = round(n_purchase / n_entered, 4) if n_entered else 0.0
+
+    return {
+        "store_id": store_id,
+        "steps": steps,
+        "conversion_rate": conversion_rate,
+    }
