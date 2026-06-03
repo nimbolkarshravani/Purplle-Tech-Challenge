@@ -13,12 +13,6 @@ MAX_BATCH_SIZE = 500
 
 
 def ingest_batch(raw_events: list, db_path: Path = None) -> dict:
-    """
-    Validate and persist a list of raw event dicts.
-
-    Returns a result dict with accepted/duplicates/errors counts.
-    Never raises -- malformed events are captured per-event, never as 5xx.
-    """
     if len(raw_events) > MAX_BATCH_SIZE:
         return {
             "status": "error",
@@ -67,5 +61,4 @@ def ingest_batch(raw_events: list, db_path: Path = None) -> dict:
 
 
 def _parse_one(raw: dict):
-    """Parse a single event dict through the discriminated union."""
     return EventBatch(events=[raw]).events[0]

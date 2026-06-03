@@ -11,17 +11,12 @@ STALE_THRESHOLD_MINUTES = 10
 
 
 def get_health(db_path: Path = None) -> dict:
-    """Return health payload. Never raises -- DB errors return degraded status."""
     try:
         with get_db(db_path) as conn:
             store_times = last_event_times(conn)
     except Exception as exc:
         logger.error(f"Health DB read failed: {exc}")
-        return {
-            "status": "degraded",
-            "error": "db_unavailable",
-            "detail": str(exc),
-        }
+        return {"status": "degraded", "error": "db_unavailable", "detail": str(exc)}
 
     now = datetime.utcnow()
     stores = {}
@@ -33,15 +28,10 @@ def get_health(db_path: Path = None) -> dict:
         except Exception:
             lag_minutes = None
             feed_status = "STALE_FEED"
-
         stores[store_id] = {
             "last_event_ts": last_ts,
             "lag_minutes": lag_minutes,
             "feed_status": feed_status,
         }
 
-    return {
-        "status": "ok",
-        "stores": stores,
-        "checked_at": now.isoformat(),
-    }
+    return {"status": "ok", "stores": stores, "checked_at": now.isoformat()}

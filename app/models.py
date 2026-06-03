@@ -8,10 +8,6 @@ from typing import Annotated, Literal, Optional, Union
 from pydantic import BaseModel, Field
 
 
-# ---------------------------------------------------------------------------
-# Store-code normalizers
-# ---------------------------------------------------------------------------
-
 def normalize_store_id(code: str) -> str:
     """Return canonical ST-prefixed store id. store_1008 -> ST1008, ST1008 -> ST1008."""
     code = code.strip()
@@ -31,10 +27,6 @@ def store_id_to_code(store_id: str) -> str:
         return f"store_{m.group(1)}"
     return store_id.lower()
 
-
-# ---------------------------------------------------------------------------
-# Raw event models (three families, discriminated on event_type)
-# ---------------------------------------------------------------------------
 
 class EntryExitEvent(BaseModel):
     event_type: Literal["entry", "exit"]
@@ -101,33 +93,26 @@ class EventBatch(BaseModel):
     events: list[RawEvent]
 
 
-# ---------------------------------------------------------------------------
-# Canonical internal event
-# ---------------------------------------------------------------------------
-
 class CanonicalEvent(BaseModel):
     """Store-agnostic internal representation with unified field names."""
     event_type: str
-    store_id: str           # always ST-prefixed, e.g. ST1008
-    visitor_id: str         # id_token for entry/exit, str(track_id) for zone/queue
+    store_id: str
+    visitor_id: str
     camera_id: str
-    timestamp: datetime     # single unified timestamp
+    timestamp: datetime
     is_staff: bool = False
-    # demographics
     gender: Optional[str] = None
     age: Optional[int] = None
     age_bucket: Optional[str] = None
     is_face_hidden: bool = False
     group_id: Optional[str] = None
     group_size: Optional[int] = None
-    # zone fields
     zone_id: Optional[str] = None
     zone_name: Optional[str] = None
     zone_type: Optional[str] = None
     is_revenue_zone: Optional[str] = None
     zone_hotspot_x: Optional[float] = None
     zone_hotspot_y: Optional[float] = None
-    # queue fields
     queue_event_id: Optional[str] = None
     queue_join_ts: Optional[datetime] = None
     queue_served_ts: Optional[datetime] = None
@@ -135,7 +120,6 @@ class CanonicalEvent(BaseModel):
     wait_seconds: Optional[int] = None
     queue_position_at_join: Optional[int] = None
     abandoned: Optional[bool] = None
-    # raw payload preserved for audit
     raw: dict = Field(default_factory=dict)
 
 
@@ -175,7 +159,6 @@ def to_canonical(event: RawEvent) -> CanonicalEvent:  # type: ignore[valid-type]
             age_bucket=event.age_bucket,
             raw=raw,
         )
-    # QueueEvent
     return CanonicalEvent(
         event_type=event.event_type,
         store_id=normalize_store_id(event.store_id),

@@ -18,3 +18,4 @@ data/*.db
 # model weights / large binaries
 *.pt
 *.onnx
+store-intelligence/
