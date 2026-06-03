@@ -15,9 +15,6 @@ from app.health import get_health
 from app.ingestion import ingest_batch
 from app.metrics import get_heatmap, get_metrics
 
-# ---------------------------------------------------------------------------
-# Structured JSON logging
-# ---------------------------------------------------------------------------
 
 class _JsonFormatter(logging.Formatter):
     def format(self, record):
@@ -38,10 +35,6 @@ logging.basicConfig(level=logging.INFO, handlers=[_handler], force=True)
 logger = logging.getLogger(__name__)
 
 
-# ---------------------------------------------------------------------------
-# App lifecycle
-# ---------------------------------------------------------------------------
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -54,10 +47,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Store Intelligence API", version="0.1.0", lifespan=lifespan)
 
-
-# ---------------------------------------------------------------------------
-# Request logging middleware
-# ---------------------------------------------------------------------------
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
@@ -79,10 +68,6 @@ async def log_requests(request: Request, call_next):
     return response
 
 
-# ---------------------------------------------------------------------------
-# Global exception handler -- no raw stack traces
-# ---------------------------------------------------------------------------
-
 @app.exception_handler(Exception)
 async def _unhandled(request: Request, exc: Exception):
     logger.error(f"Unhandled: {exc}", extra={"path": request.url.path})
@@ -91,10 +76,6 @@ async def _unhandled(request: Request, exc: Exception):
         content={"status": "error", "error": "internal_server_error"},
     )
 
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 @app.post("/events/ingest")
 async def ingest(request: Request):

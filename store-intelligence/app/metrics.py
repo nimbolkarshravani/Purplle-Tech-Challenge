@@ -7,7 +7,6 @@ from app.db import fetch_events, get_db
 
 
 def _zeroed(store_id: str) -> dict:
-    """Return a valid zeroed metrics payload for stores with no data."""
     return {
         "store_id": store_id,
         "unique_visitors": 0,
@@ -23,10 +22,6 @@ def _zeroed(store_id: str) -> dict:
 
 
 def get_metrics(store_id: str, db_path: Path = None) -> dict:
-    """
-    Compute real-time store metrics. Returns zeroed payload for unknown stores.
-    Excludes is_staff entries. Handles zero-purchase stores without crashing.
-    """
     with get_db(db_path) as conn:
         entries = fetch_events(conn, store_id, ["entry"])
         zone_entries = fetch_events(conn, store_id, ["zone_entered"])
@@ -36,14 +31,12 @@ def get_metrics(store_id: str, db_path: Path = None) -> dict:
     if not entries:
         return _zeroed(store_id)
 
-    # Unique non-staff visitors; re-entries deduplicated by id_token
     visitor_ids = {e["id_token"] for e in entries if not e.get("is_staff", False)}
     n_visitors = len(visitor_ids)
 
     if n_visitors == 0:
         return _zeroed(store_id)
 
-    # Queue stats (deduplicate by track_id)
     completed = {e["track_id"] for e in queue_evts if e["event_type"] == "queue_completed"}
     abandoned = {e["track_id"] for e in queue_evts if e["event_type"] == "queue_abandoned"}
     n_completed = len(completed)
@@ -53,8 +46,6 @@ def get_metrics(store_id: str, db_path: Path = None) -> dict:
     all_waits = [e.get("wait_seconds", 0) for e in queue_evts]
     avg_wait = round(sum(all_waits) / len(all_waits), 1) if all_waits else 0.0
 
-    # Conversion: purchasing track_ids / unique visitor id_tokens
-    # (best-effort — cross-camera id join not available in schema)
     conversion_rate = round(n_completed / n_visitors, 4) if n_visitors else 0.0
     abandonment_rate = round(n_abandoned / total_q, 4) if total_q else 0.0
 
@@ -75,11 +66,6 @@ def get_metrics(store_id: str, db_path: Path = None) -> dict:
 
 
 def _compute_dwell(zone_entries: list, zone_exits: list) -> dict:
-    """
-    Pair zone_entered with zone_exited by (track_id, zone_id).
-    Returns {zone_id: {zone_name, avg_dwell_seconds, visit_count}}.
-    Each entry is matched to the earliest subsequent exit for the same key.
-    """
     exits_by_key: dict = defaultdict(list)
     for e in zone_exits:
         ts = datetime.fromisoformat(e["event_time"])
@@ -99,7 +85,7 @@ def _compute_dwell(zone_entries: list, zone_exits: list) -> dict:
         future = [t for t in exits_by_key.get(key, []) if t > enter_ts]
         if future:
             secs = (min(future) - enter_ts).total_seconds()
-            if 0 < secs < 7200:  # sanity cap: 2 hr
+            if 0 < secs < 7200:
                 dwells[zid].append(secs)
 
     return {
@@ -113,10 +99,6 @@ def _compute_dwell(zone_entries: list, zone_exits: list) -> dict:
 
 
 def get_heatmap(store_id: str, db_path: Path = None) -> dict:
-    """
-    Zone visit frequency + avg dwell, both normalised 0-100.
-    data_confidence is 'low' when fewer than 20 unique sessions visited zones.
-    """
     with get_db(db_path) as conn:
         zone_entries = fetch_events(conn, store_id, ["zone_entered"])
         zone_exits = fetch_events(conn, store_id, ["zone_exited"])

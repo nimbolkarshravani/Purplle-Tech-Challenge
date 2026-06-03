@@ -52,12 +52,7 @@ def get_anomalies(store_id: str, db_path: Path = None) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 def _latest_ts(*event_lists) -> Optional[datetime]:
-    """Return the most recent event timestamp across all lists."""
     latest = None
     for evts in event_lists:
         for e in evts:
@@ -75,7 +70,6 @@ def _latest_ts(*event_lists) -> Optional[datetime]:
 
 
 def _baseline_type(entries: list, now: datetime) -> tuple[str, int]:
-    """Return ('rolling'|'static', n_days_of_history)."""
     if not entries:
         return "static", 0
     timestamps = []
@@ -106,15 +100,8 @@ def _parse_ts(raw: str) -> Optional[datetime]:
         return None
 
 
-# ---------------------------------------------------------------------------
-# Anomaly checks
-# ---------------------------------------------------------------------------
-
 def _check_visitor_spike(entries: list, now: datetime, baseline: str) -> list:
-    """Detect VISITOR_SPIKE: current hour count vs rolling avg or static threshold."""
     anomalies = []
-
-    # Group non-staff entries by (date, hour)
     hourly: dict = defaultdict(int)
     for e in entries:
         if e.get("is_staff"):
@@ -139,7 +126,6 @@ def _check_visitor_spike(entries: list, now: datetime, baseline: str) -> list:
             })
         return anomalies
 
-    # Rolling: average across same hour-of-day over past days (excluding today)
     same_hour_counts = [
         count for (date, hour), count in hourly.items()
         if hour == now.hour and date != now.date()
@@ -162,7 +148,6 @@ def _check_visitor_spike(entries: list, now: datetime, baseline: str) -> list:
 
 
 def _check_abandonment_surge(queue_evts: list, now: datetime) -> list:
-    """Detect QUEUE_ABANDONMENT_SURGE: abandonment rate in last 30 min > 50%."""
     window_start = now - timedelta(minutes=ABANDONMENT_WINDOW_MINUTES)
     recent = []
     for e in queue_evts:
@@ -190,8 +175,6 @@ def _check_abandonment_surge(queue_evts: list, now: datetime) -> list:
 
 
 def _check_dead_zones(zone_evts: list, entries: list, now: datetime) -> list:
-    """Detect DEAD_ZONE: zones with 0 visits in last 2 h while store has traffic."""
-    # Only meaningful if store has recent traffic
     window_start = now - timedelta(hours=DEAD_ZONE_WINDOW_HOURS)
 
     recent_entries = [
@@ -203,8 +186,7 @@ def _check_dead_zones(zone_evts: list, entries: list, now: datetime) -> list:
     if len(recent_entries) < 3:
         return []
 
-    # Collect all known zones and which had recent visits
-    all_zones: dict = {}    # zone_id -> zone_name
+    all_zones: dict = {}
     active_zones: set = set()
 
     for e in zone_evts:

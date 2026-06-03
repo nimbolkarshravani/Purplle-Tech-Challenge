@@ -21,17 +21,10 @@ def get_funnel(store_id: str, db_path: Path = None) -> dict:
         zone_evts = fetch_events(conn, store_id, ["zone_entered"])
         queue_evts = fetch_events(conn, store_id, ["queue_completed", "queue_abandoned"])
 
-    # Step 1: unique non-staff id_tokens (re-entries count once)
     entered = {e["id_token"] for e in entries if not e.get("is_staff", False)}
     n_entered = len(entered)
-
-    # Step 2: unique track_ids with at least one zone visit
     n_zone = len({e["track_id"] for e in zone_evts})
-
-    # Step 3: unique track_ids who joined the billing queue (any outcome)
     n_queue = len({e["track_id"] for e in queue_evts})
-
-    # Step 4: unique track_ids who completed a purchase
     n_purchase = len({e["track_id"] for e in queue_evts
                       if e["event_type"] == "queue_completed"})
 
